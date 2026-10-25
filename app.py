@@ -2,12 +2,15 @@ import os
 import re
 import glob
 import warnings
+import json
+import urllib.request
 import numpy as np
 import pandas as pd
 import streamlit as st
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import plotly.express as px
 from sklearn.cluster import KMeans
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
@@ -66,8 +69,8 @@ def normalize_clinical(value):
     if pd.isna(s): return "Unknown"
     s = s.lower()
     if "severe" in s: return "Severe Dengue"
-    if "warning" in s: return "Dengue With Warning Signs"
     if "without" in s: return "Dengue Without Warning Signs"
+    if "warning" in s: return "Dengue With Warning Signs"
     if "dengue" in s: return "Dengue (Unspecified)"
     return "Unknown"
 
@@ -339,7 +342,7 @@ use_example = st.sidebar.checkbox("Use example dataset (if no upload)", value=Fa
 st.sidebar.markdown("---")
 
 st.markdown('<div class="title-main">BANTAY DENGUE DASHBOARD</div>', unsafe_allow_html=True)
-st.markdown('<div class="title-sub">Upload a CSV/Excel file — explore data cleaning, EDA, clustering, prediction, and forecasting.</div>', unsafe_allow_html=True)
+st.markdown('<div class="title-sub">Upload a CSV/Excel file to explore data cleaning, EDA, clustering, prediction, and forecasting.</div>', unsafe_allow_html=True)
 
 if uploaded_file is None and not use_example:
     st.info("Please upload a CSV/Excel to begin, or toggle 'Use example dataset' in the sidebar.")
@@ -364,8 +367,6 @@ if raw is None:
     st.stop()
 
 df = preprocess(raw)
-
-# Strict Geographic Filter: Remove invalid municipalities
 valid_lower = [m.lower() for m in CONFIG["valid_municipalities"]]
 df = df[df["Municipality"].str.lower().isin(valid_lower)]
 
@@ -551,6 +552,40 @@ with tabs[5]:
     muni_counts = res["muni_counts"]
     if len(muni_counts) == 0: st.info("No municipality data available.")
     else:
+        st.markdown("##### Spatial Distribution of Dengue Cases per Municipality")
+        
+        # Load GeoJSON for Philippine Municipalities
+        geojson_url = "https://raw.githubusercontent.com/faeldon/philippines-json-maps/master/2023/geojson/municities/lowres/municities.json"
+        try:
+            with urllib.request.urlopen(geojson_url) as response:
+                ph_geojson = json.load(response)
+            
+            # Prepare data for mapping (Standardizing names for match)
+            map_df = muni_counts.reset_index()
+            map_df.columns = ["Municipality", "Cases"]
+            
+            # Plotly Choropleth Map
+            fig_map = px.choropleth(
+                map_df,
+                geojson=ph_geojson,
+                locations="Municipality",
+                featureidkey="properties.NAME_2", # Key in the GeoJSON for Municipality name
+                color="Cases",
+                hover_name="Municipality",
+                color_continuous_scale="Reds", # Matching the reference image color scheme
+                title="Dengue Hotspots in Agusan del Sur"
+            )
+            
+            # Focus map on the relevant areas and remove background map
+            fig_map.update_geos(fitbounds="locations", visible=False)
+            fig_map.update_layout(margin={"r":0,"t":40,"l":0,"b":0})
+            
+            st.plotly_chart(fig_map, use_container_width=True)
+            st.caption("Note: Map boundaries are approximated based on available public GeoJSON data.")
+            
+        except Exception as e:
+            st.warning("Map visualization could not be loaded (GeoJSON fetch failed). Showing standard bar chart instead.")
+            
         st.markdown("##### Municipality case counts")
         st.dataframe(muni_counts.rename("Cases"), use_container_width=True)
         fig, ax = plt.subplots(figsize=(9, max(3.5, len(muni_counts) * 0.3)))
