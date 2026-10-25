@@ -550,31 +550,48 @@ with tabs[4]:
 
 with tabs[5]:
     muni_counts = res["muni_counts"]
-    if len(muni_counts) == 0: st.info("No municipality data available.")
+    if len(muni_counts) == 0: 
+        st.info("No municipality data available.")
     else:
         st.markdown("##### Spatial Distribution of Dengue Cases per Municipality")
-        geojson_url = "https://raw.githubusercontent.com/reynaheleyna/ph-geocodes/master/PH.citymuni.geojson"
+        
+        # 1. Fetch a stable GeoJSON file
+        geojson_url = "https://raw.githubusercontent.com/faeldon/philippines-json-maps/master/2023/geojson/municities/lowres/municities.json"
+        
         try:
             with urllib.request.urlopen(geojson_url) as response:
                 ph_geojson = json.load(response)
+            
+            # 2. Prepare your data
             map_df = muni_counts.reset_index()
             map_df.columns = ["Municipality", "Cases"]
+            
+            # 3. FIX THE MISMATCH: Standardize names to match the GeoJSON
+            # The GeoJSON usually uses "City of X" instead of "City Of X"
+            map_df["Match_Name"] = map_df["Municipality"].str.replace("City Of", "City of", regex=False)
+            
+            # 4. Plot the map using the standardized name
             fig_map = px.choropleth(
                 map_df,
                 geojson=ph_geojson,
-                locations="Municipality",
-                featureidkey="properties.NAME_2",
+                locations="Match_Name",           # Use the cleaned name
+                featureidkey="properties.NAME_2", # Key in the GeoJSON file
                 color="Cases",
-                hover_name="Municipality",
+                hover_name="Municipality",        # Show original name on hover
                 color_continuous_scale="Reds", 
                 title="Dengue Hotspots in Agusan del Sur"
             )
+            
+            # 5. Zoom into the Agusan del Sur area and hide the world map background
             fig_map.update_geos(fitbounds="locations", visible=False)
-            fig_map.update_layout(margin={"r":0,"t":40,"l":0,"b":0})
+            fig_map.update_layout(margin={"r":0,"t":40,"l":0,"b":0}, height=600)
+            
             st.plotly_chart(fig_map, use_container_width=True)
             st.caption("Note: Map boundaries are approximated based on available public GeoJSON data.")
+            
         except Exception as e:
-            st.warning("Map visualization could not be loaded (GeoJSON fetch failed). Showing standard bar chart instead.")
+            st.warning(f"Map visualization could not be loaded. Error: {e}")
+
         st.markdown("##### Municipality case counts")
         st.dataframe(muni_counts.rename("Cases"), use_container_width=True)
         fig, ax = plt.subplots(figsize=(9, max(3.5, len(muni_counts) * 0.3)))
@@ -584,32 +601,6 @@ with tabs[5]:
         ax.set_title("Municipality ranking")
         st.pyplot(fig)
         plt.close()
-    brgy_counts = res["brgy_counts"]
-    if len(brgy_counts) > 0:
-        st.markdown("##### Top 15 barangays")
-        top_brgy = brgy_counts.head(15)
-        labels = [f"{m} - {b}" for m, b in top_brgy.index]
-        fig, ax = plt.subplots(figsize=(10, max(3.5, len(top_brgy) * 0.36)))
-        ax.barh(labels[::-1], top_brgy.values[::-1], color=plt.cm.OrRd(np.linspace(0.3, 1, len(top_brgy))), edgecolor="black")
-        ax.set_xlabel("Cases")
-        ax.set_title("Barangay ranking")
-        st.pyplot(fig)
-        plt.close()
-    cluster_summary = res["cluster_summary"]
-    if cluster_summary is not None:
-        st.markdown("##### Municipality clusters")
-        st.dataframe(cluster_summary.round(2), use_container_width=True)
-        fig, ax = plt.subplots(figsize=(7, 3.6))
-        cluster_counts = cluster_summary["Cluster"].value_counts().sort_index()
-        ax.bar([f"Cluster {c}" for c in cluster_counts.index], cluster_counts.values, color=plt.cm.Set2(np.linspace(0, 1, len(cluster_counts))), edgecolor="black")
-        ax.set_ylabel("Municipalities")
-        ax.set_title("Municipalities per cluster")
-        st.pyplot(fig)
-        plt.close()
-        total = int(cluster_summary["Cases"].sum())
-        top_muni = cluster_summary.index[0]
-        st.markdown(f'The highest-burden municipality is **{top_muni}** with **{int(cluster_summary.loc[top_muni, "Cases"]):,}** cases ({pct(cluster_summary.loc[top_muni, "Cases"], total):.1f}% of the filtered total).')
-
 with tabs[6]:
     if res["rf_case"] is None and res["rf_sev"] is None: st.info("Random Forest could not be trained on the filtered dataset.")
     else:
