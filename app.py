@@ -555,34 +555,31 @@ with tabs[5]:
     else:
         st.markdown("##### Spatial Distribution of Dengue Cases per Municipality")
         
-        # 1. Fetch a stable GeoJSON file
-        geojson_url = "https://raw.githubusercontent.com/faeldon/philippines-json-maps/master/2023/geojson/municities/lowres/municities.json"
+        # Use a working, stable GeoJSON link
+        geojson_url = "https://raw.githubusercontent.com/reynaheleyna/ph-geocodes/master/PH.citymuni.geojson"
         
         try:
             with urllib.request.urlopen(geojson_url) as response:
                 ph_geojson = json.load(response)
             
-            # 2. Prepare your data
             map_df = muni_counts.reset_index()
             map_df.columns = ["Municipality", "Cases"]
             
-            # 3. FIX THE MISMATCH: Standardize names to match the GeoJSON
-            # The GeoJSON usually uses "City of X" instead of "City Of X"
+            # Fix name mismatches (e.g., "City Of" vs "City of")
             map_df["Match_Name"] = map_df["Municipality"].str.replace("City Of", "City of", regex=False)
             
-            # 4. Plot the map using the standardized name
             fig_map = px.choropleth(
                 map_df,
                 geojson=ph_geojson,
-                locations="Match_Name",           # Use the cleaned name
-                featureidkey="properties.NAME_2", # Key in the GeoJSON file
+                locations="Match_Name",
+                featureidkey="properties.NAME_2",
                 color="Cases",
-                hover_name="Municipality",        # Show original name on hover
+                hover_name="Municipality",
                 color_continuous_scale="Reds", 
                 title="Dengue Hotspots in Agusan del Sur"
             )
             
-            # 5. Zoom into the Agusan del Sur area and hide the world map background
+            # Zoom in and hide the world background
             fig_map.update_geos(fitbounds="locations", visible=False)
             fig_map.update_layout(margin={"r":0,"t":40,"l":0,"b":0}, height=600)
             
@@ -601,6 +598,7 @@ with tabs[5]:
         ax.set_title("Municipality ranking")
         st.pyplot(fig)
         plt.close()
+        
 with tabs[6]:
     if res["rf_case"] is None and res["rf_sev"] is None: st.info("Random Forest could not be trained on the filtered dataset.")
     else:
