@@ -597,8 +597,7 @@ with tabs[5]:
         ax.set_xlabel("Cases")
         ax.set_title("Municipality ranking")
         st.pyplot(fig)
-        plt.close()
-        
+        plt.close()      
 with tabs[6]:
     if res["rf_case"] is None and res["rf_sev"] is None: st.info("Random Forest could not be trained on the filtered dataset.")
     else:
